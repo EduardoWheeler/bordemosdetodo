@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 
 # Importamos el repositorio y el modelo del dominio
-from repositorios.parche_repository import ParcheRepository
+from repositorios.parche_repositorio import ParcheRepository
 from modelos.parche import Parche
 
 class VentanaPrincipal(QMainWindow):

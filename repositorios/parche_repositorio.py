@@ -2,7 +2,7 @@ from db.conexion import Conexion
 from modelos.parche import Parche
 from repositorios.base_repository import BaseRepository
 
-class ParcheRepository(BaseRepository):
+class ParcheRepositorio(BaseRepository):
     @staticmethod
     def _a_objeto(fila: dict) -> Parche:
         return Parche(**fila)

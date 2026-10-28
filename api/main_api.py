@@ -2,128 +2,143 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
+import sys
+import os
 
-# Importamos las capas existentes de tu proyecto de escritorio
-from repositorios.parche_repository import ParcheRepository
-from modelos.parche import Parche
+# Asegurar que el directorio raíz esté en el path para importar los repositorios y modelos
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Inicializamos la aplicación FastAPI
+from repositorios.parche_repositorio import ParcheRepositorio
+
+# Inicializar la aplicación FastAPI
 app = FastAPI(
-    title="Bordemos de Todo - API Oficial",
-    description="API RESTful para conectar la base de datos de parches con la app de escritorio y la web.",
-    version="1.0.0"
+    title="Bordemos de Todo API",
+    description="API REST para la gestión de inventario y catálogo online de Bordemos de Todo.",
+    version="1.1.0"
 )
 
-# Configuración de CORS (Permite que cualquier página web o app externa consuma esta API)
+# Configurar CORS para permitir peticiones desde cualquier origen web o app de escritorio
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción puedes restringir esto a dominios específicos
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Instancia del repositorio
-repo_parche = ParcheRepository()
+# Instanciar el repositorio de la base de datos
+repo_parche = ParcheRepositorio()
 
-# --- ESQUEMAS PYDANTIC (Validación de datos de entrada/salida para la web) ---
+
+# ==========================================
+# MODELOS PYDANTIC (Esquemas de Datos)
+# ==========================================
+
 class ParcheResponse(BaseModel):
-    id: Optional[int]
+    id: int
     nombre: str
-    descripcion: Optional[str]
-    precio: int
+    descripcion: Optional[str] = None
+    precio: float
     stock: int
-    categoria_id: int
+    categoria_id: Optional[int] = None
     es_personalizado: bool
 
     class Config:
         from_attributes = True
 
-class ParcheCreate(BaseModel):
-    nombre: str = Field(..., min_length=1, max_length=100)
-    descripcion: Optional[str] = None
-    precio: int = Field(..., ge=0)
-    stock: int = Field(..., ge=0)
-    categoria_id: int
-    es_personalizado: bool = False
+
+class ItemPedido(BaseModel):
+    parche_id: int
+    cantidad: int = Field(gt=0, description="La cantidad debe ser mayor a 0")
 
 
-# --- ENDPOINTS DE LA API ---
-
-@app.get("/", tags=["General"])
-def inicio():
-    """Ruta raíz para comprobar que la API está funcionando."""
-    return {"mensaje": "Bienvenido a la API de Bordemos de Todo 🪡✨"}
+class PedidoCreate(BaseModel):
+    nombre_cliente: str = Field(min_length=2, description="Nombre del comprador")
+    email_cliente: str = Field(description="Email de contacto")
+    items: List[ItemPedido] = Field(min_items=1, description="El pedido debe tener al menos un parche")
 
 
-@app.get("/api/parches", response_model=List[ParcheResponse], tags=["Parches"])
-def listar_parches():
-    """Devuelve la lista completa de parches registrados en la base de datos."""
+class PedidoResponse(BaseModel):
+    mensaje: str
+    total_compra: float
+    items_procesados: int
+
+
+# ==========================================
+# ENDPOINTS / RUTAS DE LA API
+# ==========================================
+
+@app.get("/", tags=["Estado del Sistema"])
+def raiz():
+    """Endpoint raíz para verificar que el servidor FastAPI está operativo."""
+    return {
+        "mensaje": "Bienvenido a la API REST de Bordemos de Todo",
+        "estado": "activo",
+        "documentacion": "/docs"
+    }
+
+
+@app.get("/api/parches", response_model=List[ParcheResponse], tags=["Catálogo"])
+def obtener_todos_los_parches():
+    """
+    Retorna la lista completa de parches disponibles en la base de datos MySQL.
+    Utilizado tanto por la app de escritorio como por la página web.
+    """
     try:
-        parches = repo_parche.listar()
-        # Convertimos los objetos Parche a diccionarios o modelos compatibles
-        resultado = []
-        for p in parches:
-            resultado.append({
-                "id": p.id,
-                "nombre": p.nombre,
-                "descripcion": p.descripcion,
-                "precio": p.precio,
-                "stock": p.stock,
-                "categoria_id": p.categoria_id,
-                "es_personalizado": p.es_personalizado
-            })
-        return resultado
+        parches = repo_parche.obtener_todos()
+        return parches
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al obtener los parches: {str(e)}"
+            detail=f"Error al obtener los parches desde la base de datos: {str(e)}"
         )
 
 
-@app.get("/api/parches/{parche_id}", response_model=ParcheResponse, tags=["Parches"])
-def obtener_parche(parche_id: int):
-    """Busca un parche específico por su ID."""
+@app.post("/api/pedidos", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED, tags=["Pedidos"])
+def procesar_pedido(pedido: PedidoCreate):
+    """
+    Procesa la compra de parches desde la tienda web.
+    Valida el stock disponible y descuenta automáticamente las unidades vendidas en MySQL.
+    """
+    total_compra = 0.0
+    items_procesados = 0
+
     try:
-        p = repo_parche.buscar_por_id(parche_id)
-        if not p:
-            raise HTTPException(status_code=404, detail="Parche no encontrado")
+        # 1. Primera pasada: Validar existencia de cada parche y stock suficiente
+        for item in pedido.items:
+            parche = repo_parche.obtener_por_id(item.parche_id)
+            if not parche:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"El parche con ID {item.parche_id} no existe en el catálogo."
+                )
+            if parche.stock < item.cantidad:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Stock insuficiente para '{parche.nombre}'. Disponible: {parche.stock}, Solicitado: {item.cantidad}."
+                )
+
+        # 2. Segunda pasada: Calcular totales y actualizar el stock en la base de datos
+        for item in pedido.items:
+            parche = repo_parche.obtener_por_id(item.parche_id)
+            
+            nuevo_stock = parche.stock - item.cantidad
+            total_compra += float(parche.precio) * item.cantidad
+            items_procesados += item.cantidad
+
+            # Actualizar stock en MySQL
+            repo_parche.actualizar_stock(parche.id, nuevo_stock)
+
         return {
-            "id": p.id,
-            "nombre": p.nombre,
-            "descripcion": p.descripcion,
-            "precio": p.precio,
-            "stock": p.stock,
-            "categoria_id": p.categoria_id,
-            "es_personalizado": p.es_personalizado
+            "mensaje": f"¡Pedido registrado con éxito para {pedido.nombre_cliente}!",
+            "total_compra": round(total_compra, 2),
+            "items_procesados": items_procesados
         }
-    except HTTPException as he:
-        raise he
+
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error en el servidor: {str(e)}"
-        )
-
-
-@app.post("/api/parches", status_code=status.HTTP_201_CREATED, tags=["Parches"])
-def crear_parche(parche_data: ParcheCreate):
-    """Permite registrar un nuevo parche (ideal para formularios web o app de escritorio)."""
-    try:
-        nuevo_parche = Parche(
-            nombre=parche_data.nombre,
-            descripcion=parche_data.descripcion,
-            precio=parche_data.precio,
-            stock=parche_data.stock,
-            categoria_id=parche_data.categoria_id,
-            es_personalizado=parche_data.es_personalizado
-        )
-        nuevo_id = repo_parche.insertar(nuevo_parche)
-        return {"mensaje": "Parche creado exitosamente", "id": nuevo_id}
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"No se pudo guardar el parche: {str(e)}"
+            detail=f"Error interno al procesar el pedido: {str(e)}"
         )

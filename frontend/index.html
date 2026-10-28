@@ -3,20 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BORDEMOSDETODO - Catalogo Online</title>
+    <title>bordemos de todo - catalogo online</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+
     <header class="header-principal">
-        <h1>BORDEMOSDETODO</h1>
-        <p>Catalogo de parches sincronizado en tiempo real con la base de datos</p>
+        <div class="header-contenedor">
+            <div>
+                <h1>bordemos de todo</h1>
+                <p>catalogo de parches y tienda online</p>
+            </div>
+            <button id="btn-carrito" class="btn-carrito">
+                carrito (<span id="contador-carrito">0</span>)
+            </button>
+        </div>
     </header>
 
     <main class="contenedor-principal">
         <div id="catalogo" class="grid-catalogo">
-            <p class="mensaje-carga">Cargando parches desde el servidor ...</p>
+            <p class="mensaje-carga">cargando parches desde el servidor...</p>
         </div>
     </main>
+
+    <!-- modal del carrito y checkout -->
+    <div id="modal-carrito" class="modal oculto">
+        <div class="modal-contenido">
+            <span id="cerrar-modal" class="cerrar-modal">&times;</span>
+            <h2>tu carrito de compras</h2>
+            
+            <div id="lista-carrito" class="lista-carrito">
+                <p>el carrito esta vacio.</p>
+            </div>
+
+            <div class="carrito-footer">
+                <div class="total-container">
+                    <span>total:</span>
+                    <span id="total-carrito">$0.00</span>
+                </div>
+
+                <div class="form-checkout">
+                    <input type="text" id="nombre-cliente" placeholder="tu nombre completo" required>
+                    <input type="email" id="email-cliente" placeholder="tu correo electronico" required>
+                    <button id="btn-procesar-pedido" class="btn-accion">finalizar compra</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="js/app.js"></script>
 </body>
