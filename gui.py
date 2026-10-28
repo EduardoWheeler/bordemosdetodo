@@ -1,12 +1,12 @@
 import sys
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTableWidget, QTableWidgetItem, QPushButton, QLabel, QLineEdit,
     QMessageBox, QHeaderView
 )
-
 # Importamos el repositorio y el modelo del dominio
-from repositorios.parche_repositorio import ParcheRepository
+from repositorios.parche_repositorio import ParcheRepositorio
 from modelos.parche import Parche
 
 class VentanaPrincipal(QMainWindow):
@@ -15,8 +15,8 @@ class VentanaPrincipal(QMainWindow):
         self.setWindowTitle("Bordemos De Todo - Gestión de Stock de Parches")
         self.resize(800, 550)
 
-        # Instancia de la capa de repositorios
-        self.repo_parche = ParcheRepository()
+        # Instancia de la capa de repositorios (corregido el nombre de la clase a ParcheRepositorio)
+        self.repo_parche = ParcheRepositorio()
         self.id_seleccionado = None  # Almacena el ID del parche seleccionado en la tabla
 
         # Configuración del widget contenedor principal
@@ -56,7 +56,7 @@ class VentanaPrincipal(QMainWindow):
 
         # 3. Botones de Acción CRUD
         self.layout_botones = QHBoxLayout()
-        
+
         self.btn_cargar = QPushButton("Refrescar Tabla")
         self.btn_cargar.clicked.connect(self.cargar_datos)
         self.layout_botones.addWidget(self.btn_cargar)
@@ -94,17 +94,17 @@ class VentanaPrincipal(QMainWindow):
             self.tabla.setRowCount(0)
             for row, p in enumerate(parches):
                 self.tabla.insertRow(row)
-                # Guardamos el objeto entero o el ID en el primer item usando UserRole si se desea, 
-                # pero aquí extraemos visualmente las propiedades
-                item_id = QTableWidgetItem(str(p.id))
-                item_id.setData(32, p)  # Guardamos el objeto Parche completo en los datos del item
                 
+                item_id = QTableWidgetItem(str(p.id))
+                # Usamos Qt.ItemDataRole.UserRole de manera explícita en lugar de un número mágico
+                item_id.setData(Qt.ItemDataRole.UserRole, p)
+
                 self.tabla.setItem(row, 0, item_id)
                 self.tabla.setItem(row, 1, QTableWidgetItem(p.nombre))
                 self.tabla.setItem(row, 2, QTableWidgetItem(str(p.precio)))
                 self.tabla.setItem(row, 3, QTableWidgetItem(str(p.stock)))
                 self.tabla.setItem(row, 4, QTableWidgetItem(str(p.categoria_id)))
-            
+
             self.limpiar_formulario()
         except Exception as e:
             QMessageBox.critical(self, "Error de Conexión", f"No se pudieron cargar los datos: {e}")
@@ -114,12 +114,11 @@ class VentanaPrincipal(QMainWindow):
         seleccion = self.tabla.selectedItems()
         if not seleccion:
             return
-        
-        row = seleccion[0].row()
-        # Recuperamos el objeto Parche almacenado en la columna 0
-        item_0 = self.tabla.item(row, 0)
-        parche_obj = item_0.data(32)
 
+        row = seleccion[0].row()
+        item_0 = self.tabla.item(row, 0)
+        parche_obj = item_0.data(Qt.ItemDataRole.UserRole)
+        
         if parche_obj:
             self.id_seleccionado = parche_obj.id
             self.input_nombre.setText(parche_obj.nombre)
@@ -131,17 +130,20 @@ class VentanaPrincipal(QMainWindow):
         """Inserta un nuevo registro utilizando la capa de negocio y repositorios."""
         try:
             nombre = self.input_nombre.text().strip()
-            precio = int(self.input_precio.text())
-            stock = int(self.input_stock.text())
-            categoria_id = int(self.input_categoria.text())
+            precio_text = self.input_precio.text().strip()
+            stock_text = self.input_stock.text().strip()
+            categoria_text = self.input_categoria.text().strip()
+
+            if not nombre or not precio_text or not stock_text or not categoria_text:
+                QMessageBox.warning(self, "Atención", "Todos los campos son obligatorios.")
+                return
 
             nuevo_parche = Parche(
                 nombre=nombre,
-                precio=precio,
-                stock=stock,
-                categoria_id=categoria_id
+                precio=int(precio_text),
+                stock=int(stock_text),
+                categoria_id=int(categoria_text)
             )
-
             nuevo_id = self.repo_parche.insertar(nuevo_parche)
             QMessageBox.information(self, "Éxito", f"Parche registrado correctamente con ID: {nuevo_id}")
             self.cargar_datos()
@@ -158,18 +160,21 @@ class VentanaPrincipal(QMainWindow):
 
         try:
             nombre = self.input_nombre.text().strip()
-            precio = int(self.input_precio.text())
-            stock = int(self.input_stock.text())
-            categoria_id = int(self.input_categoria.text())
+            precio_text = self.input_precio.text().strip()
+            stock_text = self.input_stock.text().strip()
+            categoria_text = self.input_categoria.text().strip()
+
+            if not nombre or not precio_text or not stock_text or not categoria_text:
+                QMessageBox.warning(self, "Atención", "Todos los campos son obligatorios.")
+                return
 
             parche_actualizado = Parche(
                 id=self.id_seleccionado,
                 nombre=nombre,
-                precio=precio,
-                stock=stock,
-                categoria_id=categoria_id
+                precio=int(precio_text),
+                stock=int(stock_text),
+                categoria_id=int(categoria_text)
             )
-
             exito = self.repo_parche.actualizar(parche_actualizado)
             if exito:
                 QMessageBox.information(self, "Éxito", "Parche actualizado correctamente.")
@@ -182,7 +187,7 @@ class VentanaPrincipal(QMainWindow):
             QMessageBox.critical(self, "Error", f"No se pudo actualizar: {e}")
 
     def eliminar_parche(self):
-        """Elimina lógicamente/físicamente el parche seleccionado de la base de datos."""
+        """Elimina el parche seleccionado de la base de datos."""
         if not self.id_seleccionado:
             QMessageBox.warning(self, "Atención", "Selecciona un parche de la tabla para eliminar.")
             return

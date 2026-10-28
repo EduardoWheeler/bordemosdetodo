@@ -35,16 +35,15 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 async function cargarCatalogo() {
     const contenedor = document.getElementById('catalogo');
-
     try {
         const respuesta = await fetch(API_URL);
-        if (!respuesta.ok) throw new Error('error al conectar con el servidor');
-
+        if (!respuesta.ok) throw new Error('Error al conectar con el servidor');
+        
         const parches = await respuesta.json();
         contenedor.innerHTML = '';
 
         if (parches.length === 0) {
-            contenedor.innerHTML = '<p class="mensaje-carga">no hay parches disponibles.</p>';
+            contenedor.innerHTML = '<p class="mensaje-carga">No hay parches disponibles.</p>';
             return;
         }
 
@@ -54,24 +53,21 @@ async function cargarCatalogo() {
             
             card.innerHTML = `
                 <h3>${parche.nombre}</h3>
-                <p class="descripcion">${parche.descripcion || 'sin descripcion.'}</p>
+                <p class="descripcion">${parche.descripcion || 'Sin descripción.'}</p>
                 <div class="card-info">
                     <span class="precio">$${parche.precio}</span>
-                    <span class="stock">stock: ${parche.stock}</span>
+                    <span class="stock">Stock: ${parche.stock}</span>
                 </div>
-                <button class="btn-agregar" data-id="${parche.id}">agregar al carrito</button>
+                <button class="btn-agregar" data-id="${parche.id}">Agregar al carrito</button>
             `;
 
-            // Agregar el evento de forma segura sin romper cadenas HTML
             const btnAgregar = card.querySelector('.btn-agregar');
             btnAgregar.addEventListener('click', () => agregarAlCarrito(parche));
-
             contenedor.appendChild(card);
         });
-
     } catch (error) {
         console.error(error);
-        contenedor.innerHTML = '<p class="mensaje-error">error al conectar con la api backend.</p>';
+        contenedor.innerHTML = '<p class="mensaje-error">Error al conectar con la API backend.</p>';
     }
 }
 
@@ -85,7 +81,7 @@ function agregarAlCarrito(parche) {
         if (itemExistente.cantidad < parche.stock) {
             itemExistente.cantidad++;
         } else {
-            alert('no hay mas stock disponible para este parche.');
+            alert('No hay más stock disponible para este parche.');
             return;
         }
     } else {
@@ -98,14 +94,14 @@ function agregarAlCarrito(parche) {
                 stock_max: parche.stock
             });
         } else {
-            alert('producto sin stock.');
+            alert('Producto sin stock.');
             return;
         }
     }
 
     guardarCarrito();
     actualizarContadorCarrito();
-    alert(`se agrego "${parche.nombre}" al carrito.`);
+    alert(`Se agregó "${parche.nombre}" al carrito.`);
 }
 
 function guardarCarrito() {
@@ -123,15 +119,13 @@ function renderizarCarrito() {
     const totalCarrito = document.getElementById('total-carrito');
     
     listaCarrito.innerHTML = '';
-
     if (carrito.length === 0) {
-        listaCarrito.innerHTML = '<p>el carrito esta vacio.</p>';
+        listaCarrito.innerHTML = '<p>El carrito está vacío.</p>';
         totalCarrito.textContent = '$0.00';
         return;
     }
 
     let subtotalGeneral = 0;
-
     carrito.forEach(item => {
         const subtotalItem = item.precio * item.cantidad;
         subtotalGeneral += subtotalItem;
@@ -153,12 +147,12 @@ async function enviarPedido() {
     const email = document.getElementById('email-cliente').value.trim();
 
     if (!nombre || !email) {
-        alert('por favor completa tu nombre y email.');
+        alert('Por favor completa tu nombre y email.');
         return;
     }
 
     if (carrito.length === 0) {
-        alert('el carrito esta vacio.');
+        alert('El carrito está vacío.');
         return;
     }
 
@@ -181,19 +175,18 @@ async function enviarPedido() {
         const resultado = await respuesta.json();
 
         if (!respuesta.ok) {
-            throw new Error(resultado.detail || 'error al procesar la compra.');
+            throw new Error(resultado.detail || 'Error al procesar la compra.');
         }
 
-        alert(`¡compra exitosa! total pagado: $${resultado.total_compra}`);
+        alert(`¡Compra exitosa! Total pagado: $${resultado.total_compra}`);
         
         carrito = [];
         guardarCarrito();
         actualizarContadorCarrito();
         document.getElementById('modal-carrito').classList.add('oculto');
         cargarCatalogo();
-
     } catch (error) {
         console.error(error);
-        alert(`hubo un error: ${error.message}`);
+        alert(`Hubo un error: ${error.message}`);
     }
 }

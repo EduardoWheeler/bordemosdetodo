@@ -5,9 +5,8 @@ from typing import List, Optional
 import sys
 import os
 
-# Asegurar que el directorio raíz esté en el path para importar los repositorios y modelos
+# Asegurar que el directorio raíz esté en el path para importar repositorios y modelos
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from repositorios.parche_repositorio import ParcheRepositorio
 
 # Inicializar la aplicación FastAPI
@@ -29,11 +28,9 @@ app.add_middleware(
 # Instanciar el repositorio de la base de datos
 repo_parche = ParcheRepositorio()
 
-
 # ==========================================
 # MODELOS PYDANTIC (Esquemas de Datos)
 # ==========================================
-
 class ParcheResponse(BaseModel):
     id: int
     nombre: str
@@ -46,28 +43,23 @@ class ParcheResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class ItemPedido(BaseModel):
     parche_id: int
     cantidad: int = Field(gt=0, description="La cantidad debe ser mayor a 0")
-
 
 class PedidoCreate(BaseModel):
     nombre_cliente: str = Field(min_length=2, description="Nombre del comprador")
     email_cliente: str = Field(description="Email de contacto")
     items: List[ItemPedido] = Field(min_items=1, description="El pedido debe tener al menos un parche")
 
-
 class PedidoResponse(BaseModel):
     mensaje: str
     total_compra: float
     items_procesados: int
 
-
 # ==========================================
 # ENDPOINTS / RUTAS DE LA API
 # ==========================================
-
 @app.get("/", tags=["Estado del Sistema"])
 def raiz():
     """Endpoint raíz para verificar que el servidor FastAPI está operativo."""
@@ -77,22 +69,20 @@ def raiz():
         "documentacion": "/docs"
     }
 
-
 @app.get("/api/parches", response_model=List[ParcheResponse], tags=["Catálogo"])
 def obtener_todos_los_parches():
     """
     Retorna la lista completa de parches disponibles en la base de datos MySQL.
-    Utilizado tanto por la app de escritorio como por la página web.
     """
     try:
-        parches = repo_parche.obtener_todos()
+        # Llamamos a listar() que es el método estándar definido en ParcheRepositorio
+        parches = repo_parche.listar()
         return parches
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al obtener los parches desde la base de datos: {str(e)}"
         )
-
 
 @app.post("/api/pedidos", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED, tags=["Pedidos"])
 def procesar_pedido(pedido: PedidoCreate):
@@ -102,11 +92,10 @@ def procesar_pedido(pedido: PedidoCreate):
     """
     total_compra = 0.0
     items_procesados = 0
-
     try:
-        # 1. Primera pasada: Validar existencia de cada parche y stock suficiente
+        # 1. Validar existencia y stock de cada ítem
         for item in pedido.items:
-            parche = repo_parche.obtener_por_id(item.parche_id)
+            parche = repo_parche.buscar_por_id(item.parche_id)
             if not parche:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -118,23 +107,22 @@ def procesar_pedido(pedido: PedidoCreate):
                     detail=f"Stock insuficiente para '{parche.nombre}'. Disponible: {parche.stock}, Solicitado: {item.cantidad}."
                 )
 
-        # 2. Segunda pasada: Calcular totales y actualizar el stock en la base de datos
+        # 2. Procesar cálculos y actualizar stock
         for item in pedido.items:
-            parche = repo_parche.obtener_por_id(item.parche_id)
-            
+            parche = repo_parche.buscar_por_id(item.parche_id)
             nuevo_stock = parche.stock - item.cantidad
             total_compra += float(parche.precio) * item.cantidad
             items_procesados += item.cantidad
-
-            # Actualizar stock en MySQL
-            repo_parche.actualizar_stock(parche.id, nuevo_stock)
+            
+            # Actualizamos stock utilizando el método de actualización del repositorio
+            parche.stock = nuevo_stock
+            repo_parche.actualizar(parche)
 
         return {
             "mensaje": f"¡Pedido registrado con éxito para {pedido.nombre_cliente}!",
             "total_compra": round(total_compra, 2),
             "items_procesados": items_procesados
         }
-
     except HTTPException as http_ex:
         raise http_ex
     except Exception as e:

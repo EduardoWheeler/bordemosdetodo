@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class Parche:
     nombre: str
-    precio: int
+    precio: float
     stock: int
     categoria_id: int
     descripcion: str | None = None
@@ -17,17 +17,17 @@ class Parche:
             raise ValueError("El precio no puede ser negativo.")
         if self.stock < 0:
             raise ValueError("El stock no puede ser negativo.")
+        
         self.nombre = self.nombre.strip().title()
 
     def __str__(self) -> str:
-        return f"[{self.id}] {self.nombre} - ${self.precio} (Stock: {self.stock})"
-
+        return f"[{self.id}] {self.nombre} - ${self.precio:.2f} (Stock: {self.stock})"
 
 if __name__ == "__main__":
-    parche_1 = Parche(nombre= " misfits ", precio=1500, stock= 10, categoria_id=1, id=1)
+    parche_1 = Parche(nombre="misfits", precio=1500.0, stock=10, categoria_id=1, id=1)
     print(parche_1)
-    
+
     try:
-        parche_2 = Parche(nombre="ramones", precio=-500, stock=5, categoria_id=1)
+        parche_2 = Parche(nombre="ramones", precio=-500.0, stock=5, categoria_id=1)
     except ValueError as err:
-        print(f"error esperado {err}")
+        print(f"Error esperado: {err}")

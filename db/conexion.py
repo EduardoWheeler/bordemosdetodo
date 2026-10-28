@@ -6,7 +6,7 @@ class Conexion:
     def __init__(self, config: ConfigDB | None = None):
         self._config = config or ConfigDB()
         self._cnx = None
-    
+
     def __enter__(self):
         try:
             self._cnx = mysql.connector.connect(
@@ -19,14 +19,18 @@ class Conexion:
             self._cnx.autocommit = False
             return self._cnx
         except Error as e:
-            raise ConnectionError(f"no se pudo conectar a myqsl: {e}") from e
-    
+            raise ConnectionError(f"No se pudo conectar a MySQL: {e}") from e
+
     def __exit__(self, tipo_exc, exc, tb):
         if self._cnx is None:
             return False
-        if tipo_exc is None:
-            self._cnx.commit()
-        else:
-            self._cnx.rollback()
-        self._cnx.close()
+        
+        try:
+            if tipo_exc is None:
+                self._cnx.commit()
+            else:
+                self._cnx.rollback()
+        finally:
+            self._cnx.close()
+            
         return False
